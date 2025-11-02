@@ -1,15 +1,19 @@
 import motor.motor_asyncio
 from bson.objectid import ObjectId
-
 from decouple import config
 
-MONGO_DETAILS = config("MONGO_DETAILS")  # read from .env
+# Read MongoDB URI from .env (do NOT include database name in URI)
+MONGO_DETAILS = config("MONGO_DETAILS")
+
+# Connect to MongoDB
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_DETAILS)
-database = client.students
-student_collection = database.get_collection("students_collection")
+
+# Explicitly select database and collection
+database = client['students']  # database name
+student_collection = database['students_collection']  # collection name
 
 
-# Helper
+# Helper function to convert Mongo document to dict
 def student_helper(student) -> dict:
     return {
         "id": str(student["_id"]),
@@ -20,6 +24,7 @@ def student_helper(student) -> dict:
         "gpa": student["gpa"],
     }
 
+
 # CRUD Operations
 async def retrieve_students():
     students = []
@@ -27,21 +32,26 @@ async def retrieve_students():
         students.append(student_helper(student))
     return students
 
+
 async def add_student(student_data: dict) -> dict:
     student = await student_collection.insert_one(student_data)
     new_student = await student_collection.find_one({"_id": student.inserted_id})
     return student_helper(new_student)
 
+
 async def retrieve_student(id: str) -> dict:
-    try:
-        student = await student_collection.find_one({"_id": ObjectId(id)})
-        if student:
-            return student_helper(student)
-    except Exception:
+    if not ObjectId.is_valid(id):
         return None
+    student = await student_collection.find_one({"_id": ObjectId(id)})
+    if student:
+        return student_helper(student)
+    return None
+
 
 async def update_student(id: str, data: dict):
     if not data:
+        return False
+    if not ObjectId.is_valid(id):
         return False
     student = await student_collection.find_one({"_id": ObjectId(id)})
     if student:
@@ -51,9 +61,20 @@ async def update_student(id: str, data: dict):
         return updated_student.modified_count > 0
     return False
 
+
 async def delete_student(id: str):
+    if not ObjectId.is_valid(id):
+        return False
     student = await student_collection.find_one({"_id": ObjectId(id)})
     if student:
         await student_collection.delete_one({"_id": ObjectId(id)})
         return True
     return False
+
+
+# Debug function: list all student IDs
+async def list_all_ids():
+    ids = []
+    async for student in student_collection.find():
+        ids.append(str(student["_id"]))
+    return ids

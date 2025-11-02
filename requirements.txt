@@ -5,3 +5,4 @@ pydantic[email]
 motor
 pymongo
 python-decouple
+bson
